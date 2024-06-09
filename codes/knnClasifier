@@ -1,0 +1,111 @@
+from ucimlrepo import fetch_ucirepo
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import pandas as pd
+
+# Fetch dataset
+diabetes_data = fetch_ucirepo(id=296)
+
+# Data (as pandas dataframes)
+X = diabetes_data.data.features[['race', 'gender', 'age', 'number_inpatient', 'number_emergency', 'diag_1', 'diag_2', 'diag_3', 'max_glu_serum', 'A1Cresult', 'diabetesMed']]
+y = diabetes_data.data.targets
+
+# Check for mixed types in columns
+for col in X.columns:
+    print(f"Column {col} has types: {X[col].apply(type).unique()}")
+
+X['race'] = X['race'].astype(str).fillna('missing')
+X['gender'] = X['gender'].astype(str).fillna('missing')
+X['age'] = X['age'].astype(str).fillna('missing')
+X['diag_1'] = X['diag_1'].astype(str).fillna('missing')
+X['diag_2'] = X['diag_2'].astype(str).fillna('missing')
+X['diag_3'] = X['diag_3'].astype(str).fillna('missing')
+X['max_glu_serum'] = X['max_glu_serum'].astype(str).fillna('missing')
+X['A1Cresult'] = X['A1Cresult'].astype(str).fillna('missing')
+X['diabetesMed'] = X['diabetesMed'].astype(str).fillna('missing')
+
+X_train_val, X_test, y_train_val, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.25, random_state=42)
+
+categorical_cols = ['race', 'gender', 'age', 'max_glu_serum', 'A1Cresult', 'diabetesMed', 'diag_1', 'diag_2', 'diag_3']
+numerical_cols = ['number_inpatient', 'number_emergency']
+
+numerical_transformer = StandardScaler()
+
+categorical_transformer = OneHotEncoder(handle_unknown='ignore')
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numerical_transformer, numerical_cols),
+        ('cat', categorical_transformer, categorical_cols)
+    ])
+
+knn = Pipeline(steps=[('preprocessor', preprocessor),
+                      ('classifier', KNeighborsClassifier())])
+
+param_grid = {'classifier__n_neighbors': range(1, 21)}
+grid_search = GridSearchCV(knn, param_grid, cv=5, scoring='accuracy')
+grid_search.fit(X_train, y_train)
+best_knn = grid_search.best_estimator_
+
+# Validation set
+y_val_pred = best_knn.predict(X_val)
+val_accuracy = accuracy_score(y_val, y_val_pred)
+val_report = classification_report(y_val, y_val_pred)
+val_conf_matrix = confusion_matrix(y_val, y_val_pred)
+
+print(f"Validation Accuracy: {val_accuracy}")
+print(f"Validation Classification Report:\n{val_report}")
+print(f"Validation Confusion Matrix:\n{val_conf_matrix}")
+
+# Test set
+y_test_pred = best_knn.predict(X_test)
+test_accuracy = accuracy_score(y_test, y_test_pred)
+test_report = classification_report(y_test, y_test_pred)
+test_conf_matrix = confusion_matrix(y_test, y_test_pred)
+
+print(f"Test Accuracy: {test_accuracy}")
+print(f"Test Classification Report:\n{test_report}")
+print(f"Test Confusion Matrix:\n{test_conf_matrix}")
+
+
+### RESULTS
+Validation Accuracy: 0.5556920355721515
+Validation Classification Report:
+              precision    recall  f1-score   support
+
+         <30       0.37      0.04      0.07      2259
+         >30       0.45      0.35      0.39      7106
+          NO       0.60      0.80      0.68     10988
+
+    accuracy                           0.56     20353
+   macro avg       0.47      0.39      0.38     20353
+weighted avg       0.52      0.56      0.51     20353
+
+Validation Confusion Matrix:
+[[  82  839 1338]
+ [  98 2481 4527]
+ [  41 2200 8747]]
+Test Accuracy: 0.5536012577380367
+Test Classification Report:
+              precision    recall  f1-score   support
+
+         <30       0.35      0.03      0.06      2285
+         >30       0.45      0.34      0.39      7117
+          NO       0.60      0.80      0.68     10952
+
+    accuracy                           0.55     20354
+   macro avg       0.46      0.39      0.38     20354
+weighted avg       0.52      0.55      0.51     20354
+
+Test Confusion Matrix:
+[[  79  843 1363]
+ [  99 2405 4613]
+ [  50 2118 8784]]
+
+###
